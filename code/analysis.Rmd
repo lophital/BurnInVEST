@@ -1,0 +1,62 @@
+---
+title: "analysis"
+author: "Jeon"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+if (!require(here)) {install.packages('here')}
+if (!require(pacman)) {install.packages('pacman')}
+here::i_am("code/analysis.Rmd") # location of current script 
+
+p_load(tidyverse, sf, terra, tidyterra, cetcolor)
+
+```
+
+```{r}
+here("data", "diff_burn.tif") %>% rast() -> diff
+pal_cetl19_10 <- cet_pal(10, "l19")  # 이미 원하는 개수 지원
+
+ggplot() +
+    geom_spatraster(
+      data = diff,
+      alpha = 1,
+      maxcell = 1500000                 # 팔레트 색 수와 맞추기
+    ) +
+    scale_fill_gradientn(n.breaks = 30,
+    colors   = cet_pal(256, "l19") %>% rev(),   # 연속용 색 벡터
+    na.value = NA,
+    name     = "Carbon storage change (CO2 Ton ha-1)") +
+    #labs(fill = "Carbon storage change (CO2 Ton ha-1)") +
+    guides(fill = guide_colorsteps(title.position = "top",
+                                   title.hjust = 0.5,
+                                   ticks = TRUE)) +
+    theme_minimal(base_size = 14) +
+    theme(
+      panel.background = element_rect(fill = "white", colour = NA),
+      plot.background  = element_rect(fill = "white", colour = NA),
+      axis.title   = element_text(size = 45),
+      axis.text    = element_text(size = 50, 
+                                  margin = ggplot2::margin(l = 0.5, r = 0.5, unit = "cm")),
+      legend.text  = element_text(size = 70, margin = ggplot2::margin(l = 0.5, r = 0.5, t = 1, unit = "cm")),
+      legend.title = element_text(size = 60, margin = ggplot2::margin(b = 0.4, t = 0.3, unit = "cm")),
+      legend.position   = "bottom",
+      legend.key.width  = unit(13, "cm"),
+      legend.key.height = unit(2.8, "cm"),
+      panel.grid.minor  = element_line(linewidth = 1)
+    ) -> diffmap
+
+  ggsave(here("plot", paste0("Diffmap.png")),
+         diffmap, width = 100, height = 50, units = "cm",
+         dpi = 300, limitsize = FALSE, bg = "white")
+
+
+
+```
+
