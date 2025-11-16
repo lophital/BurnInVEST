@@ -15,9 +15,782 @@ if (!require(here)) {install.packages('here')}
 if (!require(pacman)) {install.packages('pacman')}
 here::i_am("code/analysis.Rmd") # location of current script 
 
-p_load(tidyverse, sf, terra, tidyterra, cetcolor)
+p_load(tidyverse, sf, terra, tidyterra, cetcolor, RColorBrewer, showtext)
 
 ```
+
+
+```{r}
+ font_add(family = "Pretendard", 
+ regular = here("fonts", "Pretendard-Regular.otf"),
+ bold = here("fonts", "Pretendard-ExtraBold.otf"),
+ italic = here("fonts", "Pretendard-SemiBold.otf"))
+ showtext_auto(enable = FALSE) 
+```
+
+
+```{r}
+here("data", "results", "change100.tif") %>% rast() -> change
+here("data", "results", "c_storage_bas_after4.tif") %>% rast() -> c_after
+here("data", "results", "c_storage_bas_before3.tif") %>% rast() -> c_before
+
+
+here("data", "results", "Extract_site.tif") %>% rast() %>% as.factor() -> lulc_before
+here("data", "results", "combine11.tif") %>% rast() %>% as.factor() -> lulc_after
+
+# 크기 정렬
+c_after %>% resample(c_before) -> c_after
+(c_before - c_after) -> change
+
+lulc_after %>% resample(c_before) -> lulc_after
+
+# 바다 마스킹
+## 1) lulc_after에서 값이 0 또는 19인 픽셀만 TRUE인 마스크 래스터 생성
+mask_0_19 <- (lulc_after == 0 | lulc_after == 19)
+# mask_0_19 이게 새로운 래스터 마스크 객체 (TRUE/FALSE)
+
+## 2) 그 마스크가 TRUE인 위치의 c_after 값을 NA로 변경해서 갱신
+c_after[mask_0_19] <- NA
+c_before[mask_0_19] <- NA
+change[mask_0_19] <- NA
+
+
+pal_cetl19_10 <- cet_pal(10, "l19")  # 이미 원하는 개수 지원
+pal_ylgnbu_10 <- colorRampPalette(brewer.pal(9, "YlGnBu"))(10)  # 10색 생성
+pal_RdGy_10 <- colorRampPalette(brewer.pal(9, "RdGy"))(10)  # 10색 생성
+
+pal_RdGy_10 <- colorRampPalette(brewer.pal(9, "Greys"))(10)  # 10색 생성
+
+pal_RdGy_darker <- c(brewer.pal(9, "Greys"), "#000000")
+
+```
+
+
+```{r BEFORE}
+ggplot() +
+    geom_spatraster(
+      data = c_before,
+      alpha = 1,
+      maxcell = 1500000                 # 팔레트 색 수와 맞추기
+    ) +
+    scale_fill_gradientn(n.breaks = 9,
+    colors   = colorRampPalette(brewer.pal(9, "YlGnBu"))(10),   # 연속용 색 벡터
+    na.value = NA,
+    name     = "Carbon storage (tCO2 ha-1)") +
+    #name     = "Carbon storage change (CO2 Ton ha-1)") +
+    #labs(fill = "Carbon storage change (CO2 Ton ha-1)") +
+    guides(fill = guide_colorsteps(title.position = "top",
+                                   title.hjust = 0.5,
+                                   ticks = TRUE)) +
+    theme_minimal(base_size = 14) +
+    theme(
+      panel.background = element_rect(fill = "white", colour = NA),
+      plot.background  = element_rect(fill = "white", colour = NA),
+      axis.text.x = element_text(size = 50,
+                                 colour = "grey20",
+                                 margin = margin(t = -1)),     # 원래 t=0.5cm → 몇 pt로 확 줄임
+      axis.text.y = element_text(size = 50,
+                                 colour = "grey20",
+                                 margin = margin(r = -1)),     # 원래 r=0.5cm → 축에 바짝
+      axis.ticks.length = unit(0, "pt"),     
+      axis.ticks = element_line(linewidth = 0.6, colour = "grey20"),
+      #axis.line  = element_line(linewidth = 0.6, colour = "grey35"),
+      axis.title   = element_text(size = 45),
+      #axis.text    = element_text(size = 50, 
+      #                            margin = ggplot2::margin(l = 0.5, r = 0.5, unit = "cm", t = 0)),
+      legend.text  = element_text(size = 70, margin = ggplot2::margin(l = 0.5, r = 0.5, t = 1, unit = "cm")),
+      legend.title = element_text(size = 60, margin = ggplot2::margin(b = 0.4, t = 0.3, unit = "cm")),
+      legend.position   = "bottom",
+      legend.key.width  = unit(13, "cm"),
+      legend.key.height = unit(2.8, "cm"),
+      panel.grid.minor  = element_line(linewidth = 1)
+    ) -> c_map_before
+
+  ggsave(here("plot", paste0("C_before.png")),
+         c_map_before, width = 100, height = 50, units = "cm",
+         dpi = 300, limitsize = FALSE, bg = "white")
+```
+
+
+
+```{r AFTER}
+ggplot() +
+    geom_spatraster(
+      data = c_after,
+      alpha = 1,
+      maxcell = 1500000                 # 팔레트 색 수와 맞추기
+    ) +
+    scale_fill_gradientn(n.breaks = 9,
+    colors   = colorRampPalette(brewer.pal(9, "YlGnBu"))(10),   # 연속용 색 벡터
+    na.value = NA,
+    name     = "Carbon storage (tCO2 ha-1)") +
+    #name     = "Carbon storage change (CO2 Ton ha-1)") +
+    #labs(fill = "Carbon storage change (CO2 Ton ha-1)") +
+    guides(fill = guide_colorsteps(title.position = "top",
+                                   title.hjust = 0.5,
+                                   ticks = TRUE)) +
+    theme_minimal(base_size = 14) +
+    theme(
+      panel.background = element_rect(fill = "white", colour = NA),
+      plot.background  = element_rect(fill = "white", colour = NA),
+      axis.text.x = element_text(size = 50,
+                                 colour = "grey20",
+                                 margin = margin(t = -1)),     # 원래 t=0.5cm → 몇 pt로 확 줄임
+      axis.text.y = element_text(size = 50,
+                                 colour = "grey20",
+                                 margin = margin(r = -1)),     # 원래 r=0.5cm → 축에 바짝
+      axis.ticks.length = unit(0, "pt"),     
+      axis.ticks = element_line(linewidth = 0.6, colour = "grey20"),
+      #axis.line  = element_line(linewidth = 0.6, colour = "grey35"),
+      axis.title   = element_text(size = 45),
+      #axis.text    = element_text(size = 50, 
+      #                            margin = ggplot2::margin(l = 0.5, r = 0.5, unit = "cm", t = 0)),
+      legend.text  = element_text(size = 70, margin = ggplot2::margin(l = 0.5, r = 0.5, t = 1, unit = "cm")),
+      legend.title = element_text(size = 60, margin = ggplot2::margin(b = 0.4, t = 0.3, unit = "cm")),
+      legend.position   = "bottom",
+      legend.key.width  = unit(13, "cm"),
+      legend.key.height = unit(2.8, "cm"),
+      panel.grid.minor  = element_line(linewidth = 1)
+      ) -> c_map_after
+
+  ggsave(here("plot", paste0("C_after.png")),
+         c_map_after, width = 100, height = 50, units = "cm",
+         dpi = 300, limitsize = FALSE, bg = "white")
+```
+
+
+```{r CHANGE}
+ggplot() +
+    geom_spatraster(
+      data = change %>% clamp(upper = 100, lower = 0),
+      alpha = 1,
+      maxcell = 1500000                 # 팔레트 색 수와 맞추기
+    ) +
+    scale_fill_gradientn(n.breaks = 12,
+    colors   = pal_RdGy_darker,#colorRampPalette(brewer.pal(9, "RdGy"))(10),   # 연속용 색 벡터
+    na.value = NA,
+    name     = "Carbon Loss (tCO2 ha-1)") +
+    #name     = "Carbon storage change (CO2 Ton ha-1)") +
+    #labs(fill = "Carbon storage change (CO2 Ton ha-1)") +
+    guides(fill = guide_colorsteps(title.position = "top",
+                                   title.hjust = 0.5,
+                                   ticks = TRUE)) +
+    theme_minimal(base_size = 14) +
+    theme(
+      panel.background = element_rect(fill = "white", colour = NA),
+      plot.background  = element_rect(fill = "white", colour = NA),
+      axis.text.x = element_text(size = 50,
+                                 colour = "grey20",
+                                 margin = margin(t = -1)),     # 원래 t=0.5cm → 몇 pt로 확 줄임
+      axis.text.y = element_text(size = 50,
+                                 colour = "grey20",
+                                 margin = margin(r = -1)),     # 원래 r=0.5cm → 축에 바짝
+      axis.ticks.length = unit(0, "pt"),     
+      axis.ticks = element_line(linewidth = 0.6, colour = "grey20"),
+      #axis.line  = element_line(linewidth = 0.6, colour = "grey35"),
+      axis.title   = element_text(size = 45),
+      #axis.text    = element_text(size = 50, 
+      #                            margin = ggplot2::margin(l = 0.5, r = 0.5, unit = "cm", t = 0)),
+      legend.text  = element_text(size = 70, margin = ggplot2::margin(l = 0.5, r = 0.5, t = 1, unit = "cm")),
+      legend.title = element_text(size = 60, margin = ggplot2::margin(b = 0.4, t = 0.3, unit = "cm")),
+      legend.position   = "bottom",
+      legend.key.width  = unit(13, "cm"),
+      legend.key.height = unit(2.8, "cm"),
+      panel.grid.minor  = element_line(linewidth = 1)
+    ) -> change_map
+
+  ggsave(here("plot", paste0("Change_map.png")),
+         change_map, width = 100, height = 50, units = "cm",
+         dpi = 300, limitsize = FALSE, bg = "white")
+```
+
+
+```{r LULC Before}
+lut <- tribble(
+ ~value, ~label,             ~hex,
+  1,   "주거지역",         "#FEE6C2",
+  20,   "공업지역",         "#C08484",
+  2,   "상업지역",         "#ED83B8",
+  18,   "문화체육휴양지역", "#F6718A",
+  3,   "교통지역",         "#F7412A",
+  4,   "공공시설지역",     "#F6B112",
+  5,   "논",               "#FFFFBF",
+  6,   "밭",               "#F7F966",
+  7,   "시설재배지",       "#DFDC73",
+  8,   "과수원",           "#B8B12C",
+  9,   "기타재배지",       "#B89112",
+  10,   "활엽수림",         "#33A02C",
+  11,   "침엽수림",         "#0A4F40",
+  12,   "혼효림",           "#336633",
+  21,   "자연초지",         "#A1D594",
+  13,   "인공초지",         "#607E33",
+  14,   "내륙습지(수변식생)", "#B4A7D0",
+  15,   "자연 나지",        "#C1DBEC",
+  16,   "인공 나지",        "#9FF2FF",
+  17,   "내륙수",           "#3EA7FF",
+  19,   "해양수",           NA,
+  0, "해", NA
+  # 빈값(심볼 22, #FFFFFF)은 보통 NoData/미분류로 취급 → 필요 시 따로 처리
+)
+
+# 3) 레벨(속성) 부착
+levels(lulc_before) <- lut %>% transmute(value, class = label)
+#levels(lulc_before) <- dplyr::select(lut, value, class = label)
+
+# 4) 팔레트(컬러테이블) 부착: 행명에 '코드값'을 넣어야 terra가 맞춰 매핑함
+ct <- cbind(t(col2rgb(lut$hex)), 255)        # R,G,B,A
+rownames(ct) <- as.character(lut$value)
+coltab(lulc_before) <- list(ct)
+
+ggplot() +
+    geom_spatraster(
+      data = lulc_before,
+      alpha = 1,show.legend = FALSE,
+      maxcell = 1500000                 # 팔레트 색 수와 맞추기
+    ) +
+    #scale_fill_gradientn(n.breaks = 7,
+    #colors   = colorRampPalette(brewer.pal(9, "YlGnBu"))(10) %>% rev(),   # 연속용 색 벡터
+    #na.value = NA,
+    #name     = "Carbon storage (tCO2 ha-1)") +
+    #name     = "Carbon storage change (CO2 Ton ha-1)") +
+    #labs(fill = "Carbon storage change (CO2 Ton ha-1)") +
+    scale_fill_manual(                     # 이게 범주(카테고리)용
+    #labels = lut$label[match(levels(lulc_before)[[1]]$value, lut$value)],
+    #values = setNames(lut$hex, lut$label)
+    values = setNames(lut$hex, lut$label),  # 라벨→색상 매핑
+    breaks = lut$label,                     # 범례 순서 고정  
+    drop = FALSE
+    ) +
+    #guides(fill = guide_colorsteps(title.position = "top",
+    #                               title.hjust = 0.5,
+    #                               ticks = TRUE)) +
+    guides(fill = guide_legend(ncol = 7, title = "Land-Use Land-Cover", 
+                               title.position = "top",
+                                   title.hjust = 0.5,)) +
+    theme_minimal(base_size = 14) +
+    theme(
+      panel.background = element_rect(fill = "white", colour = NA),
+      plot.background  = element_rect(fill = "white", colour = NA),
+      axis.text.x = element_text(size = 50,
+                                 colour = "grey20",
+                                 margin = margin(t = -1)),     # 원래 t=0.5cm → 몇 pt로 확 줄임
+      axis.text.y = element_text(size = 50,
+                                 colour = "grey20",
+                                 margin = margin(r = -1)),     # 원래 r=0.5cm → 축에 바짝
+      axis.ticks.length = unit(0, "pt"),     
+      axis.ticks = element_line(linewidth = 0.6, colour = "grey20"),
+      #axis.line  = element_line(linewidth = 0.6, colour = "grey35"),
+      axis.title   = element_text(size = 45),
+      #axis.text    = element_text(size = 50, 
+      #                            margin = ggplot2::margin(l = 0.5, r = 0.5, unit = "cm", t = 0)),
+      legend.text  = element_text(size = 70, margin = ggplot2::margin(l = 0.5, r = 0.5, t = 1, unit = "cm")),
+      legend.title = element_text(size = 60, margin = ggplot2::margin(b = 0.4, t = 0.3, unit = "cm")),
+      legend.position   = "bottom",
+      legend.key.width  = unit(2, "cm"),
+      legend.key.height = unit(2, "cm"),
+      panel.grid.minor  = element_line(linewidth = 1)
+    ) -> c_map_before
+
+  ggsave(here("plot", paste0("map_lulc_before.png")),
+         c_map_before, width = 115, height = 50, units = "cm",
+         dpi = 300, limitsize = FALSE, bg = "white")
+```
+
+
+
+
+```{r LULC After}
+lut <- tribble(
+ ~value, ~label,             ~hex,
+  1,   "주거지역",         "#FEE6C2",
+  20,   "공업지역",         "#C08484",
+  2,   "상업지역",         "#ED83B8",
+  18,   "문화체육휴양지역", "#F6718A",
+  3,   "교통지역",         "#F7412A",
+  4,   "공공시설지역",     "#F6B112",
+  5,   "논",               "#FFFFBF",
+  6,   "밭",               "#F7F966",
+  7,   "시설재배지",       "#DFDC73",
+  8,   "과수원",           "#B8B12C",
+  9,   "기타재배지",       "#B89112",
+  10,   "활엽수림",         "#33A02C",
+  11,   "침엽수림",         "#0A4F40",
+  12,   "혼효림",           "#336633",
+  21,   "자연초지",         "#A1D594",
+  13,   "인공초지",         "#607E33",
+  14,   "내륙습지(수변식생)", "#B4A7D0",
+  15,   "자연 나지",        "#C1DBEC",
+  16,   "인공 나지",        "#9FF2FF",
+  17,   "내륙수",           "#3EA7FF",
+  19,   "해양수",           NA,
+   0,   "해",           NA,
+ 311, "활엽수-경미",         "#F9D4CF",
+ 312, "활엽수-심각",         "#E46A6A",
+ 313, "활엽수-매우심각",     "#9E1C1C",
+ 321, "침엽수-경미",         "#EEDCCB",
+ 322, "침엽수-심각",         "#C07A45",
+ 323, "침엽수-매우심각",     "#6B3A13",
+ 331, "혼효림-경미",         "#F6E0CC",
+ 332, "혼효림-심각",         "#D5853C",
+ 333, "혼효림-매우심각",     "#7A2E1C"
+)
+
+# 3) 레벨(속성) 부착
+levels(lulc_after) <- lut %>% transmute(value, class = label)
+#levels(lulc_before) <- dplyr::select(lut, value, class = label)
+
+# 4) 팔레트(컬러테이블) 부착: 행명에 '코드값'을 넣어야 terra가 맞춰 매핑함
+ct <- cbind(t(col2rgb(lut$hex)), 255)        # R,G,B,A
+rownames(ct) <- as.character(lut$value)
+coltab(lulc_after) <- list(ct)
+
+ggplot() +
+    geom_spatraster(show.legend = FALSE,
+      data = lulc_after,
+      alpha = 1,
+      maxcell = 2500000                 # 팔레트 색 수와 맞추기
+    ) +
+    #scale_fill_gradientn(n.breaks = 7,
+    #colors   = colorRampPalette(brewer.pal(9, "YlGnBu"))(10) %>% rev(),   # 연속용 색 벡터
+    #na.value = NA,
+    #name     = "Carbon storage (tCO2 ha-1)") +
+    #name     = "Carbon storage change (CO2 Ton ha-1)") +
+    #labs(fill = "Carbon storage change (CO2 Ton ha-1)") +
+    scale_fill_manual(                     # 이게 범주(카테고리)용
+    #labels = lut$label[match(levels(lulc_before)[[1]]$value, lut$value)],
+    #values = setNames(lut$hex, lut$label)
+    values = setNames(lut$hex, lut$label),  # 라벨→색상 매핑
+    breaks = lut$label,                     # 범례 순서 고정  
+    drop = FALSE
+    ) +
+    #guides(fill = guide_colorsteps(title.position = "top",
+    #                               title.hjust = 0.5,
+    #                               ticks = TRUE)) +
+    guides(fill = guide_legend(ncol = 7, title = "Land-Use Land-Cover", 
+                               title.position = "top",
+                                   title.hjust = 0.5,)) +
+    theme_minimal(base_size = 14) +
+    theme(
+      panel.background = element_rect(fill = "white", colour = NA),
+      plot.background  = element_rect(fill = "white", colour = NA),
+      axis.text.x = element_text(size = 50,
+                                 colour = "grey20",
+                                 margin = margin(t = -1)),     # 원래 t=0.5cm → 몇 pt로 확 줄임
+      axis.text.y = element_text(size = 50,
+                                 colour = "grey20",
+                                 margin = margin(r = -1)),     # 원래 r=0.5cm → 축에 바짝
+      axis.ticks.length = unit(0, "pt"),     
+      axis.ticks = element_line(linewidth = 0.6, colour = "grey20"),
+      #axis.line  = element_line(linewidth = 0.6, colour = "grey35"),
+      axis.title   = element_text(size = 45),
+      #axis.text    = element_text(size = 50, 
+      #                            margin = ggplot2::margin(l = 0.5, r = 0.5, unit = "cm", t = 0)),
+      legend.text  = element_text(size = 70, margin = ggplot2::margin(l = 0.5, r = 0.5, t = 1, unit = "cm")),
+      legend.title = element_text(size = 60, margin = ggplot2::margin(b = 0.4, t = 0.3, unit = "cm")),
+      legend.position   = "bottom",
+      legend.key.width  = unit(2, "cm"),
+      legend.key.height = unit(2, "cm"),
+      panel.grid.minor  = element_line(linewidth = 1)
+    ) -> c_map_after
+
+  ggsave(here("plot", paste0("map_lulc_after.png")),
+         c_map_after, width = 115, height = 50, units = "cm",
+         dpi = 300, limitsize = FALSE, bg = "white")
+```
+
+
+```{r LEGENDEXTRACT}
+
+lut_en <- tribble(
+  ~value, ~label,                 ~hex,
+   1,   "Residential area",               "#FEE6C2",
+  20,   "Industrial area",                "#C08484",
+   2,   "Commercial area",                "#ED83B8",
+  18,   "Cultural/sports/recreation area","#F6718A",
+   3,   "Transportation area",            "#F7412A",
+   4,   "Public facilities area",         "#F6B112",
+   5,   "Rice paddy",                     "#FFFFBF",
+   6,   "Upland field",                   "#F7F966",
+   7,   "Greenhouse cultivation",         "#DFDC73",
+   8,   "Orchard",                        "#B8B12C",
+   9,   "Other cultivated land",          "#B89112",
+  10,   "Broadleaf forest",               "#33A02C",
+  11,   "Coniferous forest",              "#0A4F40",
+  12,   "Mixed forest",                   "#336633",
+  21,   "Natural grassland",              "#A1D594",
+  13,   "Artificial grassland",           "#607E33",
+  14,   "Inland wetland (riparian veg.)", "#B4A7D0",
+  15,   "Natural bare land",              "#C1DBEC",
+  16,   "Artificial bare land",           "#9FF2FF",
+  17,   "Inland water",                   "#3EA7FF",
+ 311,   "Broadleaf (low)",                "#F9D4CF",
+ 312,   "Broadleaf (severe)",             "#E46A6A",
+ 313,   "Broadleaf (very severe)",        "#9E1C1C",
+ 321,   "Coniferous (low)",               "#EEDCCB",
+ 322,   "Coniferous (severe)",            "#C07A45",
+ 323,   "Coniferous (very severe)",       "#6B3A13",
+ 331,   "Mixed (low)",                    "#F6E0CC",
+ 332,   "Mixed (severe)",                 "#D5853C",
+ 333,   "Mixed (very severe)",            "#7A2E1C"
+)
+
+
+
+# 3) 레벨(속성) 부착
+levels(lulc_after) <- lut_en %>% transmute(value, class = label)
+#levels(lulc_before) <- dplyr::select(lut, value, class = label)
+
+# 4) 팔레트(컬러테이블) 부착: 행명에 '코드값'을 넣어야 terra가 맞춰 매핑함
+ct <- cbind(t(col2rgb(lut_en$hex)), 255)        # R,G,B,A
+rownames(ct) <- as.character(lut_en$value)
+coltab(lulc_after) <- list(ct)
+
+ggplot() +
+    geom_spatraster(show.legend = TRUE,
+      data = lulc_after,
+      alpha = 1,
+      maxcell = 2500000                 # 팔레트 색 수와 맞추기
+    ) +
+    #scale_fill_gradientn(n.breaks = 7,
+    #colors   = colorRampPalette(brewer.pal(9, "YlGnBu"))(10) %>% rev(),   # 연속용 색 벡터
+    #na.value = NA,
+    #name     = "Carbon storage (tCO2 ha-1)") +
+    #name     = "Carbon storage change (CO2 Ton ha-1)") +
+    #labs(fill = "Carbon storage change (CO2 Ton ha-1)") +
+    scale_fill_manual(                     # 이게 범주(카테고리)용
+    #labels = lut$label[match(levels(lulc_before)[[1]]$value, lut$value)],
+    #values = setNames(lut$hex, lut$label)
+    values = setNames(lut_en$hex, lut_en$label),  # 라벨→색상 매핑
+    breaks = lut_en$label,                     # 범례 순서 고정  
+    drop = FALSE
+    ) +
+    #guides(fill = guide_colorsteps(title.position = "top",
+    #                               title.hjust = 0.5,
+    #                               ticks = TRUE)) +
+    guides(fill = guide_legend(ncol = 7, title = "Land-Use Land-Cover", 
+                               title.position = "top",
+                                   title.hjust = 0.5,)) +
+    theme_minimal(base_size = 14) +
+    theme(
+      panel.background = element_rect(fill = "white", colour = NA),
+      plot.background  = element_rect(fill = "white", colour = NA),
+      axis.text.x = element_text(size = 50,
+                                 colour = "grey20",
+                                 margin = margin(t = -1)),     # 원래 t=0.5cm → 몇 pt로 확 줄임
+      axis.text.y = element_text(size = 50,
+                                 colour = "grey20",
+                                 margin = margin(r = -1)),     # 원래 r=0.5cm → 축에 바짝
+      axis.ticks.length = unit(0, "pt"),     
+      axis.ticks = element_line(linewidth = 0.6, colour = "grey20"),
+      #axis.line  = element_line(linewidth = 0.6, colour = "grey35"),
+      axis.title   = element_text(size = 45),
+      #axis.text    = element_text(size = 50, 
+      #                            margin = ggplot2::margin(l = 0.5, r = 0.5, unit = "cm", t = 0)),
+      legend.text  = element_text(size = 70, margin = ggplot2::margin(l = 0.5, r = 4.5, t = 1, unit = "cm")),
+      legend.title = element_text(size = 85, margin = ggplot2::margin(b = 2.4, t = 0.3, unit = "cm")),
+      legend.position   = "bottom",
+      legend.key.width  = unit(2, "cm"),
+      legend.key.height = unit(2, "cm"),
+      panel.grid.minor  = element_line(linewidth = 1)
+    ) -> c_map_after
+
+legends <- cowplot::get_plot_component(c_map_after, "guide-box", return_all = TRUE)
+
+ggsave(here("plot", paste0("legend_lulc_after.png")), plot = legends[[3]], width = 230, height = 30,  units = "cm",
+         dpi = 300, limitsize = FALSE, bg = "white")
+```
+
+
+
+```{r LegendExtract}
+
+lut_kr <- tribble(
+ ~value, ~label,             ~hex,
+  1,   "주거지역",         "#FEE6C2",
+  20,   "공업지역",         "#C08484",
+  2,   "상업지역",         "#ED83B8",
+  18,   "문화체육휴양지역", "#F6718A",
+  3,   "교통지역",         "#F7412A",
+  4,   "공공시설지역",     "#F6B112",
+  5,   "논",               "#FFFFBF",
+  6,   "밭",               "#F7F966",
+  7,   "시설재배지",       "#DFDC73",
+  8,   "과수원",           "#B8B12C",
+  9,   "기타재배지",       "#B89112",
+  10,   "활엽수림",         "#33A02C",
+  11,   "침엽수림",         "#0A4F40",
+  12,   "혼효림",           "#336633",
+  21,   "자연초지",         "#A1D594",
+  13,   "인공초지",         "#607E33",
+  14,   "내륙습지(수변식생)", "#B4A7D0",
+  15,   "자연 나지",        "#C1DBEC",
+  16,   "인공 나지",        "#9FF2FF",
+  17,   "내륙수",           "#3EA7FF",
+ 311, "활엽수-경미",         "#F9D4CF",
+ 312, "활엽수-심각",         "#E46A6A",
+ 313, "활엽수-매우심각",     "#9E1C1C",
+ 321, "침엽수-경미",         "#EEDCCB",
+ 322, "침엽수-심각",         "#C07A45",
+ 323, "침엽수-매우심각",     "#6B3A13",
+ 331, "혼효림-경미",         "#F6E0CC",
+ 332, "혼효림-심각",         "#D5853C",
+ 333, "혼효림-매우심각",     "#7A2E1C"
+)
+
+# 3) 레벨(속성) 부착
+levels(lulc_after) <- lut_kr %>% transmute(value, class = label)
+#levels(lulc_before) <- dplyr::select(lut, value, class = label)
+
+# 4) 팔레트(컬러테이블) 부착: 행명에 '코드값'을 넣어야 terra가 맞춰 매핑함
+ct <- cbind(t(col2rgb(lut_kr$hex)), 255)        # R,G,B,A
+rownames(ct) <- as.character(lut_kr$value)
+coltab(lulc_after) <- list(ct)
+
+ggplot() +
+    geom_spatraster(show.legend = TRUE,
+      data = lulc_after,
+      alpha = 1,
+      maxcell = 2500000                 # 팔레트 색 수와 맞추기
+    ) +
+    #scale_fill_gradientn(n.breaks = 7,
+    #colors   = colorRampPalette(brewer.pal(9, "YlGnBu"))(10) %>% rev(),   # 연속용 색 벡터
+    #na.value = NA,
+    #name     = "Carbon storage (tCO2 ha-1)") +
+    #name     = "Carbon storage change (CO2 Ton ha-1)") +
+    #labs(fill = "Carbon storage change (CO2 Ton ha-1)") +
+    scale_fill_manual(                     # 이게 범주(카테고리)용
+    #labels = lut$label[match(levels(lulc_before)[[1]]$value, lut$value)],
+    #values = setNames(lut$hex, lut$label)
+    values = setNames(lut_kr$hex, lut_kr$label),  # 라벨→색상 매핑
+    breaks = lut_kr$label,                     # 범례 순서 고정  
+    drop = FALSE
+    ) +
+    #guides(fill = guide_colorsteps(title.position = "top",
+    #                               title.hjust = 0.5,
+    #                               ticks = TRUE)) +
+    guides(fill = guide_legend(ncol = 7, title = "토지피복 분류", 
+                               title.position = "top",
+                                   title.hjust = 0.5,)) +
+    theme_minimal(base_size = 14) +
+    theme(
+      panel.background = element_rect(fill = "white", colour = NA),
+      plot.background  = element_rect(fill = "white", colour = NA),
+      axis.text.x = element_text(size = 50,
+                                 colour = "grey20",
+                                 margin = margin(t = -1)),     # 원래 t=0.5cm → 몇 pt로 확 줄임
+      axis.text.y = element_text(size = 50,
+                                 colour = "grey20",
+                                 margin = margin(r = -1)),     # 원래 r=0.5cm → 축에 바짝
+      axis.ticks.length = unit(0, "pt"),     
+      axis.ticks = element_line(linewidth = 0.6, colour = "grey20"),
+      #axis.line  = element_line(linewidth = 0.6, colour = "grey35"),
+      axis.title   = element_text(size = 45),
+      #axis.text    = element_text(size = 50, 
+      #                            margin = ggplot2::margin(l = 0.5, r = 0.5, unit = "cm", t = 0)),
+      legend.text  = element_text(size = 40, margin = ggplot2::margin(l = 0.5, r = 3.5, t = 1, unit = "cm")),
+      legend.title = element_text(size = 85, margin = ggplot2::margin(b = 2.4, t = 0.3, unit = "cm")),
+      legend.position   = "bottom",
+      legend.key.width  = unit(2, "cm"),
+      legend.key.height = unit(2, "cm"),
+      panel.grid.minor  = element_line(linewidth = 1)
+    ) -> c_map_after
+
+legends <- cowplot::get_plot_component(c_map_after, "guide-box", return_all = TRUE)
+
+ggsave(here("plot", paste0("legend_lulc_after_kr.png")), plot = legends[[3]], width = 110, height = 25,  units = "cm",
+         dpi = 300, limitsize = FALSE, bg = "white")
+
+```
+
+
+```{r}
+here("data", "ESA_CCI.tif") %>% rast() %>% 
+  project("EPSG:5186") %>%
+  resample(c_after) %>%
+  c(c_before, c_after) -> ccompare
+
+names(ccompare) <- c("ESA", "before", "after")
+
+mask_ESA_c0 <- (ccompare[[1]] == 0 | is.na(ccompare[[1]]))
+# mask_0_19 이게 새로운 래스터 마스크 객체 (TRUE/FALSE)
+
+## 2) 그 마스크가 TRUE인 위치의 c_after 값을 NA로 변경해서 갱신
+ccompare[mask_ESA_c0] <- NA
+
+lulc_before_ccompare <- lulc_before
+lulc_before_ccompare[mask_ESA_c0] <- NA
+c(ccompare, lulc_before_ccompare) -> ccompare
+
+as.data.frame(ccompare) -> df_cc
+
+df_cc %>%
+  na.omit() %>%
+  mutate(ESA = round(ESA, 2),
+         before = round(before, 2),
+         after = round(after, 2)) -> df_cc
+```
+
+
+```{r}
+df_cc %>%
+  ggplot(aes(ESA, before)) +
+#  geom_point() +
+  geom_abline(slope = 1, intercept = 0) +
+  geom_hex() +
+  scale_fill_viridis_c() +
+  theme_light() +
+  theme()
+```
+
+```{r}
+resid_rast <- ccompare$ESA - ccompare$before
+resid_rast
+names(resid_rast) <- "resid_ESA_before"
+plot(resid_rast)  # 또는 ggplot + geom_spatraster
+
+
+
+
+```
+
+```{r}
+df_cc_long <- df_cc %>%
+  select(ESA, before) %>%
+  pivot_longer(everything(), names_to = "source", values_to = "carbon")
+
+df_cc_long %>%
+  ggplot(aes(carbon, fill = source)) +
+  geom_density(alpha = 0.4) +
+  theme_light() +
+  labs(x = "Carbon (t C / ha)",
+       y = "Density",
+       fill = NULL)
+
+```
+
+```{r}
+# 10,   "Broadleaf forest",               "#33A02C",
+#  11,   "Coniferous forest",              "#0A4F40",
+#  12,   "Mixed forest",       
+
+df_cc %>%
+  filter(Extract_site %in% c(10, 11, 12)) %>%
+  mutate(Extract_site = case_when(Extract_site == 10 ~ "Broadleaf forest",
+                                  Extract_site == 11 ~ "Coniferous forest",
+                                  Extract_site == 12 ~ "Mixed forest",
+                                  .default = as.character(Extract_site)))  %>%
+  mutate(resid_ESA_before = ESA - before) %>%
+  ggplot(aes(resid_ESA_before, fill = Extract_site)) +
+  geom_density(aes(colour = after_scale(fill)),
+               alpha = 0.4) +
+  #geom_histogram(alpha = 0.7, binwidth = 5) +
+  scale_x_continuous(breaks = seq(-160, 160, by = 40)) +
+  guides(fill = guide_legend(ncol = 3, 
+                             title = "Forest type",
+                             title.position = "top",
+                             title.hjust = 0.5,
+                             )) +
+  #facet_wrap("Extract_site", scales = "free_y") +
+  theme_light() +
+  theme(panel.background = element_rect(fill = "white", colour = NA),
+      plot.background  = element_rect(fill = "white", colour = NA),
+      axis.text.x = element_text(size = 12,
+                                 colour = "grey20",
+                                 margin = margin(t = 0.5)),     # 원래 t=0.5cm → 몇 pt로 확 줄임
+      axis.text.y = element_text(size = 12,
+                                 colour = "grey20",
+                                 margin = margin(r = 0.5)),     # 원래 r=0.5cm → 축에 바짝
+      #axis.ticks = element_line(linewidth = 0.6, colour = "grey20"),
+      #axis.line  = element_line(linewidth = 0.6, colour = "grey35"),
+      axis.title   = element_text(size = 18#,
+      #axis.text    = element_text(size = 50, 
+                                  #margin = ggplot2::margin(l = 0.5, r = 0.5, unit = "cm", t = 0)
+      ),
+      axis.title.x = element_text(size = 18, margin = ggplot2::margin(t = 0.5, b = 0.2, unit = "cm")),
+      axis.title.y = element_text(size = 18, margin = ggplot2::margin(l = 0.5, r = 0.5, unit = "cm")),
+      legend.text  = element_text(size = 14, 
+                                  margin = ggplot2::margin(l = 0.2, r = 0.2, unit = "cm")),
+      legend.title = element_text(size = 18
+                                  , margin = ggplot2::margin(b = 0.5, t = 0.1, unit = "cm")
+                                  ),
+      legend.position   = "bottom",
+      legend.key.width  = unit(1, "cm"),
+      legend.key.height = unit(1, "cm"),
+      #panel.grid.minor  = element_line(linewidth = 1)
+      ) + 
+  labs(x = "ESA CCI - InVEST Carbon storage", y = "Density") -> gg_deltahist
+
+ggsave(here("plot", "gg_deltahist.png"), gg_deltahist, width = 30, height = 20, dpi = 300, units = "cm")
+```
+
+
+
+
+```{r}
+here('data', "Out_mosaic.tif") %>% rast() -> out
+out[out == 0] <- NA
+here("data", "RdNBR", "clamped_RdNBR.tif") %>% rast() %>% project("EPSG:5186") -> US
+
+c(US, out) %>%
+as.data.frame() %>%
+  na.omit() -> df_cat
+names(df_cat) <- c("RdNBR", "BS")
+
+df_cat %>%
+  mutate(BS = as.factor(BS),
+         BS = case_when(BS == "1" ~ "Low",
+                        BS == "2" ~ "Moderate",
+                        BS == "3" ~ "High")) %>%
+  ggplot(aes(RdNBR, fill = BS)) +
+  geom_density(aes(colour = after_scale(fill)),
+               alpha = 0.4) +
+  scale_x_continuous(breaks = seq(-3, 3, by = 0.5)) +
+  guides(fill = guide_legend(ncol = 3, 
+                             title = "Burn severity",
+                             title.position = "top",
+                             title.hjust = 0.5),
+         colour = NA) +
+  theme_light() +
+  labs(y = "Density", 
+       x ="RdNBR") +
+  theme(
+      panel.background = element_rect(fill = "white", colour = NA),
+      plot.background  = element_rect(fill = "white", colour = NA),
+      axis.text.x = element_text(size = 15,
+                                 colour = "grey20",
+                                 margin = margin(t = 0.5, unit = "cm")),     # 원래 t=0.5cm → 몇 pt로 확 줄임
+      axis.text.y = element_text(size = 15,
+                                 colour = "grey20",
+                                 margin = margin(r = 0.5, unit = "cm")),     # 원래 r=0.5cm → 축에 바짝
+      axis.title.x = element_text(size = 18, margin = ggplot2::margin(t = 0.3, b = 0.3, unit = "cm")),
+      axis.title.y = element_text(size = 18, margin = ggplot2::margin(l = 0.5, r = 0.5, unit = "cm")), 
+      #axis.ticks.length = unit(0, "pt"),     
+      #axis.ticks = element_line(linewidth = 0.6, colour = "grey20"),
+      legend.text  = element_text(size = 14
+                                  , margin = ggplot2::margin(l = 0.5, r = 0.18, unit = "cm")
+                                  ),
+      legend.title = element_text(size = 18
+                                  , margin = ggplot2::margin(b = 0.5, t = 0.3, unit = "cm")
+                                  ),
+      legend.position   = "bottom",
+      legend.key.width  = unit(1, "cm"),
+      legend.key.height = unit(1, "cm")
+    ) -> gg_burnBS
+
+ggsave(here("plot", paste0("RdNBR_Burnseverirty.png")), plot = gg_burnBS, width = 30, height = 20,  units = "cm",
+         dpi = 300, limitsize = FALSE, bg = "white")
+```
+
+
+```{r}
+
+lulc_after %>% resample(US) -> lulc_after
+lulc_before %>% resample(US) -> lulc_before
+
+c(lulc_after, lulc_before, US, out, ) -> r_all
+plot(r_all)
+```
+
 
 ```{r}
 here("data", "diff_burn.tif") %>% rast() -> diff
