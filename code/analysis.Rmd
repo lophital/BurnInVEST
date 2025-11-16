@@ -15,7 +15,7 @@ if (!require(here)) {install.packages('here')}
 if (!require(pacman)) {install.packages('pacman')}
 here::i_am("code/analysis.Rmd") # location of current script 
 
-p_load(tidyverse, sf, terra, tidyterra, cetcolor, RColorBrewer, showtext)
+p_load(tidyverse, sf, terra, tidyterra, cetcolor, RColorBrewer, showtext, ggalluvial)
 
 ```
 
@@ -64,6 +64,262 @@ pal_RdGy_10 <- colorRampPalette(brewer.pal(9, "Greys"))(10)  # 10색 생성
 pal_RdGy_darker <- c(brewer.pal(9, "Greys"), "#000000")
 
 ```
+
+# Burn severity vs Forest type
+```{r}
+# 1) 셀 면적 (ha) – 투영좌표계가 m 단위라고 가정
+cell_area_ha <- prod(res(lulc_after)) / 10000
+
+# 2) 311~313, 321~323, 331~333 코드별 면적 요약
+df_flow <- freq(lulc_after) %>%
+  as.data.frame() %>%
+  filter(value %in% c(311:313, 321:323, 331:333)) %>%
+  transmute(
+    code   = value,
+    forest = case_when(
+      code %in% 311:313 ~ "활엽수",
+      code %in% 321:323 ~ "침엽수",
+      code %in% 331:333 ~ "혼효림",
+      TRUE              ~ NA_character_
+    ),
+    severity = case_when(
+      code %in% c(311, 321, 331) ~ "경미",
+      code %in% c(312, 322, 332) ~ "심각",
+      code %in% c(313, 323, 333) ~ "매우심각",
+      TRUE                       ~ NA_character_
+    ),
+    area_ha = count * cell_area_ha
+  ) %>%
+  mutate(
+    forest   = factor(forest,   levels = c("활엽수", "침엽수", "혼효림")),
+    severity = factor(severity, levels = c("경미", "심각", "매우심각"))
+  )
+```
+
+
+```{r}
+ggplot(
+  df_flow,
+  aes(axis1 = forest, axis2 = severity, y = area_ha)
+) +
+  geom_alluvium(aes(fill = forest), alpha = 0.7, width = 0.25) +
+  geom_stratum(width = 0.25, fill = "grey95", color = "grey40") +
+  geom_label(
+    stat = "stratum",
+    aes(label = after_stat(stratum)),
+    size = 4
+  ) +
+  scale_x_discrete(
+    limits = c("수종", "피해심각도"),
+    expand = c(.1, .1)
+  ) +
+  scale_y_continuous(name = "면적 (ha)") +
+  labs(fill = "수종") +
+  theme_minimal(base_size = 14) +
+  theme(
+    panel.grid   = element_blank(),
+    axis.title.x = element_blank()
+  )
+
+
+
+```
+
+
+```{r}
+df_flow_prop <- df_flow %>%
+  group_by(forest) %>%
+  mutate(prop = area_ha / sum(area_ha)) %>%
+  ungroup()
+
+ggplot(
+  df_flow_prop,
+  aes(axis1 = forest, axis2 = severity, y = prop)
+) +
+  geom_alluvium(aes(fill = forest), alpha = 0.7, width = 0.25) +
+  geom_stratum(width = 0.25, fill = "grey95", color = "grey40") +
+  geom_label(
+    stat = "stratum",
+    aes(label = after_stat(stratum)),
+    size = 4
+  ) +
+  scale_y_continuous(name = "비율", labels = scales::percent_format()) +
+  scale_x_discrete(
+    limits = c("수종", "피해심각도"),
+    expand = c(.1, .1)
+  ) +
+  labs(fill = "수종") +
+  theme_minimal(base_size = 14) +
+  theme(
+    panel.grid   = element_blank(),
+    axis.title.x = element_blank()
+  )
+
+```
+
+```{r}
+# 0) 셀 면적 (ha) – 좌표계가 m 단위라고 가정
+cell_area_ha <- prod(res(lulc_after)) / 10000
+
+# 1) 코드별 픽셀 수 집계
+df_codes <- freq(lulc_after) %>%
+  as.data.frame() %>%
+  filter(value %in% c(311:313, 321:323, 331:333)) %>%
+  transmute(
+    code   = value,
+    count  = count,
+    area_ha = count * cell_area_ha,
+    forest = case_when(
+      code %in% 311:313 ~ "활엽수",
+      code %in% 321:323 ~ "침엽수",
+      code %in% 331:333 ~ "혼효림",
+      TRUE              ~ NA_character_
+    ),
+    severity = case_when(
+      code %in% c(311, 321, 331) ~ "경미",
+      code %in% c(312, 322, 332) ~ "심각",
+      code %in% c(313, 323, 333) ~ "매우심각",
+      TRUE                       ~ NA_character_
+    )
+  ) %>%
+  mutate(
+    forest   = factor(forest,   levels = c("활엽수", "침엽수", "혼효림")),
+    severity = factor(severity, levels = c("경미", "심각", "매우심각"))
+  )
+
+df_codes
+
+```
+
+```{r}
+forest_sev <- df_codes %>%
+  group_by(forest, severity) %>%
+  summarise(area_ha = sum(area_ha), .groups = "drop") %>%
+  group_by(forest) %>%
+  mutate(
+    total_forest_area_ha = sum(area_ha),
+    prop_within_forest   = area_ha / total_forest_area_ha
+  ) %>%
+  ungroup()
+
+forest_sev
+
+```
+
+
+```{r}
+forest_sev %>%
+  mutate(area_ha_ratio = area_ha / total_forest_area_ha * 100)
+```
+
+
+```{r}
+severity_overall <- forest_sev %>%
+  group_by(severity) %>%
+  summarise(
+    area_ha = sum(area_ha),
+    .groups = "drop"
+  ) %>%
+  mutate(
+    total_area_ha = sum(area_ha),
+    prop_overall  = area_ha / total_area_ha
+  )
+
+severity_overall
+
+```
+
+```{r}
+# 2-1. 고심도(심각+매우심각) / 경미 이분
+df_high <- df_codes %>%
+  mutate(
+    high = if_else(severity %in% c("매우심각"),
+                   "고심도", "경미")
+  ) %>%
+  group_by(forest, high) %>%
+  summarise(area_ha = sum(area_ha), .groups = "drop") %>%
+  group_by(forest) %>%
+  mutate(
+    total_forest_area_ha = sum(area_ha),
+    prop_within_forest   = area_ha / total_forest_area_ha
+  ) %>%
+  ungroup()
+
+df_high
+
+```
+
+
+
+
+
+```{r}
+forest_high <- df_high %>%
+  filter(high == "고심도") %>%
+  select(forest, prop_high = prop_within_forest)
+
+forest_high
+
+```
+
+
+```{r}
+global_high <- df_high %>%
+  group_by(high) %>%
+  summarise(area_ha = sum(area_ha), .groups = "drop") %>%
+  mutate(
+    total_area_ha = sum(area_ha),
+    prop_overall  = area_ha / total_area_ha
+  ) %>%
+  filter(high == "고심도") %>%
+  pull(prop_overall)
+
+global_high
+
+```
+```{r}
+forest_high_rel <- forest_high %>%
+  mutate(rel_index = prop_high / global_high)
+
+forest_high_rel
+
+```
+```{r}
+tab_forest_sev <- xtabs(count ~ forest + severity, data = df_codes)
+tab_forest_sev
+```
+
+
+```{r}
+chisq_res <- chisq.test(tab_forest_sev)
+chisq_res
+chisq_res$stdres
+```
+
+
+```{r}
+prop.table(tab_forest_sev, 1)
+
+```
+
+
+```{r}
+tab <- tab_forest_sev
+chisq_res <- chisq.test(tab)
+
+n <- sum(tab)
+k <- min(dim(tab))
+
+cramers_v <- sqrt(chisq_res$statistic / (n * (k - 1)))
+cramers_v
+
+```
+
+
+
+
+
+
 
 
 ```{r BEFORE}
